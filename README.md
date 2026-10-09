@@ -9,8 +9,9 @@ coupling, and reconstructs eliminated voltages using sparse factorized solves.
 
 **This is a prescribed-current numerical equivalent, not an aggregated
 nonlinear power-flow model or an OPF feasibility certificate.** Opti-KRON
-candidate selection, GDM adapters, radialization, and equipment export are
-planned but not yet implemented.
+candidate selection, radialization, and equipment export are planned but not
+yet implemented. GDM metadata and fixed-configuration reference-scenario
+ingestion are available through the optional gdm-flow integration.
 
 ## Install
 
@@ -51,6 +52,44 @@ Every fixed-source bus must be retained. Disconnected terminals, singular or
 excessively ill-conditioned blocks, nonfinite inputs, and neutral/split-phase
 labels are rejected. Inputs are copied and reduction does not mutate them.
 Kron equivalents can have significant fill-in even when the input is sparse.
+
+## GDM Scenario Ingestion
+
+```sh
+python -m pip install -e '.[dev,flow]'
+python examples/ingest_gdm.py ../gdm-flow/tests/data/ieee-13/gdm/ieee13_system.json
+```
+
+```python
+from gdm.distribution import DistributionSystem
+from gdm_reduce import build_gdm_scenario_library
+
+system = DistributionSystem.from_json("model.json")
+library = build_gdm_scenario_library(system, load_scales=[0.5, 1.0])
+```
+
+The library stores original terminal indexing, nominal phase-voltage bases,
+bus/component UUID lineage, configuration fingerprints, and solver provenance.
+Each scenario must converge, share the same source state and passive matrix,
+and satisfy the voltage/current KCL consistency tolerance. The generator copies
+the model and rejects backend hardware-state mutations. It uses the backend's
+constant-P/Q semantics; ZIP/delta fidelity and OpenDSS baseline validation are
+not established by this check. Time-series profiles are not interpreted yet.
+
+`from_gdm_flow_results(system, results)` accepts a mapping of names to solved
+results; callers must supply their original model. Matrices are taken from the
+results, not independently restamped. Fingerprints include the full static GDM
+component serialization, so models differing in UUIDs or static load settings
+are conservatively rejected when mixing references. No utility data is copied.
+
+External IEEE-13 integration tests discover the sibling gdm-flow data directory.
+Set `GDM_REDUCE_TEST_DATA` to override it. They skip if the data or optional
+backend is unavailable; ordinary consistency tests run without gdm-flow.
+
+The supplied IEEE-13 model is exercised end to end. IEEE-123 must include its
+referenced `ieee_123_node_time_series` companion storage before GDM can load it.
+The supplied P4U model includes S1/S2 terminals and is explicitly outside the
+current A/B/C adapter scope; no phases or storage metadata are silently dropped.
 
 ## Development
 

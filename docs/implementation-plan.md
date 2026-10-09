@@ -12,9 +12,11 @@ provides independent reference validation. Do not duplicate the stamping code.
 1. **Foundation and exact reduction (implemented):** package scaffold, CI,
    BSD-3-Clause licensing, source-conditioned Schur elimination, exact loaded
    current transformation, batched solves, and voltage reconstruction.
-2. **Scenario ingestion:** public gdm-flow adapter; original component UUID
+2. **Scenario ingestion (implemented):** public gdm-flow adapter; original component UUID
    lineage; nominal voltage bases; configuration fingerprints; scenario shape,
-   source, KCL residual, and reference-convergence validation.
+  source, KCL residual, and reference-convergence validation. Generates static
+  load-scale snapshots and ingests caller-provided converged results; temporal
+  profile interpretation and independent reference validation remain future work.
 3. **Candidate search:** whole-bus phase-compatible adjacent cluster merges,
    protected source/transformer/control/DER buses, accumulated cluster currents,
    original-scenario error checks, deterministic ties, and bounded batches.
@@ -58,8 +60,8 @@ stopped because of a target, infeasibility, iteration limit, or resource limit.
 ## Deferred Scope and Upstream Dependencies
 
 Explicit neutrals, split-phase, meshed-input reduction, GPU acceleration, and
-OPF disaggregation are deferred. An optional flow extra declares the planned
-dependency but does not yet expose a GDM adapter. True sparse assembly is an
+OPF disaggregation are deferred. The optional flow extra enables reference
+generation through the GDM adapter. True sparse assembly is an
 upstream gdm-flow requirement before utility-scale benchmarks: its current
 `sparse=True` path first allocates a dense matrix. Keep private utility data and
 copyrighted paper PDFs outside this repository.
