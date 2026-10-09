@@ -4,13 +4,13 @@ Phase-aware Kron reduction for distribution systems in the
 [NLR Distribution Suite](https://github.com/NLR-Distribution-Suite).
 
 This alpha implements exact source-conditioned electrical reduction and
-phase-aware Opti-KRON candidate search. It uses
+phase-aware Opti-KRON candidate search with radial numerical equivalents. It uses
 existing A/B/C bus-phase terminals, retains whole buses, preserves phase
 coupling, and reconstructs eliminated voltages using sparse factorized solves.
 
 **This is a prescribed-current numerical equivalent, not an aggregated
-nonlinear power-flow model or an OPF feasibility certificate.** Radialization
-and reduced GDM feeder export are not yet implemented. GDM metadata and fixed-configuration reference-scenario
+nonlinear power-flow model or an OPF feasibility certificate.** Reduced GDM
+feeder export is not yet implemented. GDM metadata and fixed-configuration reference-scenario
 ingestion are available through the optional gdm-flow integration.
 
 ## Install
@@ -130,9 +130,37 @@ not a globally optimal partition or a held-out/nonlinear accuracy guarantee.
 `selected` contains clusters, complete name and UUID mappings, original-index
 pooled currents, represented training voltages, step diagnostics, a stop reason,
 and a `KronReductionResult`. **It is not a GDM `DistributionSystem`.** The eventual
-export requires radialization, supported equipment reconstruction, and independent
+export still requires supported equipment reconstruction and independent
 nonlinear validation. Use `selected.aggregated_currents`, rather than the original
 library currents, to solve the selected current-pooled equivalent.
+
+## Radialization
+
+```python
+from gdm_reduce import radialize_reduction
+
+radial = radialize_reduction(selected, constraints.bus_edges)
+retained_voltage = radial.equivalent.solve(selected.aggregated_currents)
+```
+
+Eliminating a branching junction can turn a tree into a meshed Schur equivalent.
+Radialization prunes non-root leaves from the original physical tree, restores
+non-root branching junctions in the subtree connecting selected roots, and
+suppresses degree-two paths. This is minimal structural restoration for that
+tree, not a claim of globally minimal equipment reconstruction.
+
+Restored junctions have zero pooled injection; they do not become new cluster
+roots or receive reassigned devices. Original cluster/UUID mappings, currents,
+and training scores remain in `radial.selection`. `radial.retained_buses` includes
+both selected roots and restored junctions, so `radial.reduction_fraction` can
+be smaller than the search reduction. The example reports both percentages.
+
+Both original and radial matrix bus couplings must match their physical trees.
+No matrix entries are discarded to conceal mesh edges. Selected-terminal complex
+voltages must agree within 1e-7 V absolute and 1e-9 relative tolerance by default;
+the result reports their maximum difference. Coupled and missing A/B/C phases
+are preserved. This remains a numerical equivalent, not GDM feeder equipment
+or nonlinear validation.
 
 ## Development
 

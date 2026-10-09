@@ -8,6 +8,7 @@ from .adapters import (
 )
 from .kron import KronReductionResult, kron_reduce, solve_voltages
 from .models import BusPhaseLabel, ElectricalNetwork
+from .radialization import RadializationResult, radialize_reduction
 from .scenarios import ReferenceScenario, ScenarioLibrary, configuration_fingerprint
 from .search import CandidateSearchResult, ReductionStep, optimize_kron_reduction
 
@@ -17,6 +18,7 @@ __all__ = [
     "ElectricalNetwork",
     "GDMSearchConstraints",
     "KronReductionResult",
+    "RadializationResult",
     "ReferenceScenario",
     "ReductionStep",
     "ScenarioLibrary",
@@ -26,5 +28,6 @@ __all__ = [
     "get_gdm_search_constraints",
     "kron_reduce",
     "optimize_kron_reduction",
+    "radialize_reduction",
     "solve_voltages",
 ]

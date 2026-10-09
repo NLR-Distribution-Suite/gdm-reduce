@@ -96,6 +96,25 @@ def _represent(
     return represented, float(np.max(errors)), smice
 
 
+def _bus_tree(
+    buses: Collection[str], bus_edges: Collection[tuple[str, str]]
+) -> nx.Graph:
+    graph = nx.Graph()
+    graph.add_nodes_from(buses)
+    for edge in bus_edges:
+        if (
+            not isinstance(edge, tuple)
+            or len(edge) != 2
+            or any(bus not in graph for bus in edge)
+            or edge[0] == edge[1]
+        ):
+            raise ValueError("Bus edges must connect two distinct known bus names.")
+        graph.add_edge(*edge)
+    if not nx.is_tree(graph):
+        raise ValueError("Candidate search requires a connected radial bus graph.")
+    return graph
+
+
 def optimize_kron_reduction(
     library: ScenarioLibrary,
     bus_edges: Collection[tuple[str, str]],
@@ -141,19 +160,7 @@ def optimize_kron_reduction(
     protected = frozenset(protected_buses) | frozenset(
         bus for bus, _ in network.source_voltages
     )
-    graph = nx.Graph()
-    graph.add_nodes_from(buses)
-    for edge in bus_edges:
-        if (
-            not isinstance(edge, tuple)
-            or len(edge) != 2
-            or any(bus not in buses for bus in edge)
-            or edge[0] == edge[1]
-        ):
-            raise ValueError("Bus edges must connect two distinct known bus names.")
-        graph.add_edge(*edge)
-    if not nx.is_tree(graph):
-        raise ValueError("Candidate search requires a connected radial bus graph.")
+    graph = _bus_tree(buses, bus_edges)
     indices = {label: index for index, label in enumerate(network.labels)}
     phases = {
         bus: {phase for name, phase in network.labels if name == bus} for bus in buses

@@ -9,6 +9,7 @@ from gdm_reduce import (
     build_gdm_scenario_library,
     get_gdm_search_constraints,
     optimize_kron_reduction,
+    radialize_reduction,
 )
 
 
@@ -35,10 +36,23 @@ def main() -> None:
         target_reduction_fraction=arguments.target_reduction,
         max_iterations=arguments.max_iterations,
     )
-    retained_voltage = selected.equivalent.solve(selected.aggregated_currents)
-    print(f"Original/retained buses: {len(library.bus_uuids)}/{len(selected.clusters)}")
+    radial = radialize_reduction(selected, constraints.bus_edges)
+    retained_voltage = radial.equivalent.solve(selected.aggregated_currents)
+    print(f"Original buses: {len(library.bus_uuids)}")
+    print(
+        f"Selected roots/radial buses: {len(selected.clusters)}/"
+        f"{len(radial.retained_buses)}"
+    )
     print(f"Protected buses: {len(selected.protected_buses)}")
-    print(f"Reduction: {selected.reduction_fraction:.1%}")
+    print(
+        f"Search/radial reduction: {selected.reduction_fraction:.1%}/"
+        f"{radial.reduction_fraction:.1%}"
+    )
+    print(f"Restored junctions: {', '.join(radial.restored_buses) or '(none)'}")
+    print(
+        "Maximum selected voltage change (V): "
+        f"{radial.max_selected_voltage_difference_v:.3g}"
+    )
     print(f"Maximum training magnitude error (pu): {selected.max_voltage_error_pu:.6g}")
     print(f"SMICE (pu): {selected.smice:.6g}")
     print(f"Stop reason: {selected.termination_reason}")

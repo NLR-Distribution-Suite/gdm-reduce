@@ -24,8 +24,13 @@ provides independent reference validation. Do not duplicate the stamping code.
   bounded batches; complete name/UUID mappings; and numerical equivalents.
   IEEE-13 ingestion and search are exercised together. Output is not yet a
   reduced GDM feeder or a validated nonlinear deployment model.
-4. **Radialization:** minimal required junction restoration, unchanged injection
-   assignments, radiality tests, and retained-voltage equivalence checks.
+4. **Radialization (implemented):** prune non-root leaves, restore non-root branch
+  vertices of the subtree connecting selected roots, and suppress degree-two
+  paths. Preserve cluster/UUID mappings and pooled injections, verify original
+  and reduced matrix bus connectivity, and check selected complex-voltage
+  equivalence. Synthetic branching/coupled/missing-phase cases and IEEE-13 are
+  exercised. Final bus counts include restored zero-injection junctions; this
+  is structural restoration, not equipment reconstruction or nonlinear validation.
 5. **Validated alpha release:** CLI, versioned result bundles, synthetic and
    IEEE examples, held-out scenario reports, and reproducible CPU benchmarks.
 6. **GDM feeder export:** supported equipment reconstruction, device/time-series

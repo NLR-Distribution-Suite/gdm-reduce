@@ -79,3 +79,28 @@ Training magnitude thresholds do not bound voltage angles, losses, source power,
 thermal loading, held-out conditions, or nonlinear aggregated-device behavior.
 This result is not a physical feeder export; arbitrary Schur fill-in is not
 silently converted into GDM line/transformer equipment.
+
+## Radial Numerical Equivalent
+
+For a radial original physical bus graph, take the minimal subtree connecting
+the selected roots. Restore its non-root vertices of degree at least three;
+degree-two paths can still be eliminated. Removed dangling branches do not
+force restoration. Recompute the Schur equivalent from the original matrix
+with all selected roots and restored junctions kept.
+
+The pooled original-index current matrix is unchanged. Restored junctions have
+zero injection and are not new assignment roots. Therefore eliminating those
+junctions again recovers the selected numerical equivalent; selected-terminal
+complex voltages must agree within configured tolerances (defaults: 1e-7 V
+absolute, 1e-9 relative). Both the original matrix's inter-bus nonzero support
+and the radial matrix's support must exactly match their respective physical
+trees. No coupling is thresholded away to obtain a tree. Inputs with unsupported
+nonlocal couplings or numerical artifacts inconsistent with that contract are
+rejected rather than presented as physical radial feeders.
+
+The reported radial reduction counts restored buses. Search cluster membership,
+UUID mapping, and training scores remain separate and unchanged. Restored
+junction voltages are electrical solutions, not the representative root values
+assigned during training-error scoring. Equipment realizability, nonlinear
+device aggregation, holdouts, and independent feeder validation remain separate
+release/export gates.

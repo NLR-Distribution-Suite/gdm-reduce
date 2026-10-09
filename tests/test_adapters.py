@@ -29,6 +29,7 @@ from gdm_reduce import (
     get_gdm_search_constraints,
     kron_reduce,
     optimize_kron_reduction,
+    radialize_reduction,
 )
 
 
@@ -333,3 +334,6 @@ def test_ieee13_library_and_exact_reconstruction():
     assert selected.max_voltage_error_pu <= 0.001
     assert constraints.protected_buses <= set(selected.retained_buses)
     assert len(selected.bus_uuid_to_retained_uuid) == len(library.bus_uuids)
+    radial = radialize_reduction(selected, constraints.bus_edges)
+    assert radial.max_selected_voltage_difference_v < 1e-7
+    assert set(selected.retained_buses) <= set(radial.retained_buses)
