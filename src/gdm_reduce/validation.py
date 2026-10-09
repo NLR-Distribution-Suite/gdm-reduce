@@ -8,7 +8,11 @@ import numpy as np
 
 from .kron import solve_voltages
 from .radialization import RadializationResult
-from .scenarios import ScenarioLibrary, configuration_fingerprint
+from .scenarios import (
+    ScenarioLibrary,
+    configuration_fingerprint,
+    split_phase_voltage_errors,
+)
 from .search import CandidateSearchResult
 
 
@@ -25,6 +29,12 @@ class ScenarioValidation:
     source_reactive_power_error_var: float
     passive_active_power_error_w: float
     within_magnitude_limit: bool
+    max_line_to_line_magnitude_error_pu: float = 0.0
+    max_line_to_line_complex_error_pu: float = 0.0
+    reference_max_leg_imbalance_pu: float = 0.0
+    represented_max_leg_imbalance_pu: float = 0.0
+    max_leg_imbalance_error_pu: float = 0.0
+    within_split_phase_limit: bool = True
 
 
 @dataclass(frozen=True)
@@ -41,7 +51,10 @@ class ReductionValidationReport:
 
     @property
     def passed(self) -> bool:
-        return all(scenario.within_magnitude_limit for scenario in self.scenarios)
+        return all(
+            scenario.within_magnitude_limit and scenario.within_split_phase_limit
+            for scenario in self.scenarios
+        )
 
     @property
     def max_voltage_magnitude_error_pu(self) -> float:
@@ -58,6 +71,7 @@ def pool_scenario_currents(
         selection.equivalent.network,
         library.voltage_bases,
         model_signature=library.model_signature,
+        service_domains=library.service_domains,
     )
     if (
         library.network.labels != selection.equivalent.network.labels
@@ -113,6 +127,7 @@ def evaluate_reduction(
     complex_errors = np.abs(represented - reference) / bases
     baseline_errors = np.abs(full_voltage - reference) / bases
     angle_errors = np.abs(np.rad2deg(np.angle(represented * np.conj(reference))))
+    differential = split_phase_voltage_errors(library, represented, reference)
     actual_currents = library.network.admittance @ electrical_voltage
     reduced_power = electrical_voltage * np.conj(actual_currents)
     reference_power = reference * np.conj(library.currents)
@@ -142,6 +157,8 @@ def evaluate_reduction(
             float(source_difference[index].imag),
             float(passive_difference[index]),
             bool(np.max(magnitude_errors[:, index]) <= voltage_error_limit_pu),
+            *(float(values[index]) for values in differential),
+            bool(differential[1][index] <= voltage_error_limit_pu),
         )
         for index, scenario in enumerate(library.scenarios)
     )

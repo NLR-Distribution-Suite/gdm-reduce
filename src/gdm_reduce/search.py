@@ -11,7 +11,7 @@ import networkx as nx
 import numpy as np
 
 from .kron import KronReductionResult, _boundary, _condition_limit, _solve, kron_reduce
-from .scenarios import ScenarioLibrary
+from .scenarios import ScenarioLibrary, split_phase_voltage_errors
 
 
 @dataclass(frozen=True)
@@ -93,7 +93,14 @@ def _represent(
         float(np.max(errors[roots == root], axis=0).sum())
         for root in sorted(set(mapping.values()))
     )
-    return represented, float(np.max(errors)), smice
+    differential_error = split_phase_voltage_errors(
+        library, represented, reference_voltage
+    )[1]
+    return (
+        represented,
+        max(float(np.max(errors)), float(np.max(differential_error))),
+        smice,
+    )
 
 
 def _bus_tree(
@@ -191,6 +198,8 @@ def optimize_kron_reduction(
             if removed not in protected
             for receiver in graph.neighbors(removed)
             if phases[removed] <= phases[receiver]
+            and library.service_domains.get(removed)
+            == library.service_domains.get(receiver)
             and all(
                 np.isclose(
                     library.voltage_bases[indices[(removed, phase)]],

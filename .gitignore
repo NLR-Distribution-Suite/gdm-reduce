@@ -9,4 +9,6 @@ coverage.xml
 htmlcov/
 build/
 dist/
+/results/
+/plots/
 .DS_Store

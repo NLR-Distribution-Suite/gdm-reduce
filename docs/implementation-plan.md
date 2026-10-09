@@ -1,4 +1,4 @@
-# Implementation Roadmap
+# Scope and Validation
 
 ## Ownership
 
@@ -7,7 +7,7 @@ owns matrix stamping and nonlinear feeder solves. gdm-reduce owns electrical
 reduction, clustering, mapping, radialization, and accuracy reports. OpenDSS
 provides independent reference validation. Do not duplicate the stamping code.
 
-## Milestones
+## Implemented Capabilities
 
 1. **Foundation and exact reduction (implemented):** package scaffold, CI,
    BSD-3-Clause licensing, source-conditioned Schur elimination, exact loaded
@@ -22,8 +22,8 @@ provides independent reference validation. Do not duplicate the stamping code.
   source/transformer/regulator/switch/control/DER/capacitor buses; accumulated
   cluster currents; original-terminal scenario error checks; deterministic ties;
   bounded batches; complete name/UUID mappings; and numerical equivalents.
-  IEEE-13 ingestion and search are exercised together. Output is not yet a
-  reduced GDM feeder or a validated nonlinear deployment model.
+  IEEE-13 ingestion and search are exercised together. Search returns a numerical
+  equivalent; physical equipment export is a separate step.
 4. **Radialization (implemented):** prune non-root leaves, restore non-root branch
   vertices of the subtree connecting selected roots, and suppress degree-two
   paths. Preserve cluster/UUID mappings and pooled injections, verify original
@@ -38,11 +38,24 @@ provides independent reference validation. Do not duplicate the stamping code.
   and phase-specific tests; IEEE-13 holdout runs; per-stage CPU timings and
   environment metadata. Independent baseline fidelity, representative benchmark
   campaigns and nonlinear deployment certification remain open release gates.
-6. **GDM feeder export:** supported equipment reconstruction, device/time-series
-   lineage, and independent nonlinear electrical validation. Reject unsupported
-   equivalents instead of claiming all Schur matrices are ordinary feeders.
+6. **GDM feeder export (implemented for supported radial equivalents):** passive
+  matrix-impedance path contraction, retained protected equipment and bus UUIDs,
+  device/time-series lineage, canonical GDM serialization, a restamped Y-bus
+  check, and separately solved constant-P/Q training/holdout validation. Charging
+  omission requires explicit series-only authorization. Unsupported equivalents
+  are rejected; independent whole-feeder OpenDSS validation remains separate.
 
 ## Search Contract
+Ground-referenced S1/S2 support is implemented with per-leg bases, fingerprinted
+service identities, protected transformer boundaries, complex differential-voltage
+constraints, imbalance diagnostics, and v2 replay metadata. Grounded center taps
+are an explicit default assumption on solver copies, with strict metadata mode
+available. Independent OpenDSS service fixtures exercise unequal/leg-to-leg
+loads, mutual coupling, stress, and reverse power. Center-tap no-load core losses
+and complete one-based winding-pair indices are supported and independently
+checked against OpenDSS. Explicit/floating neutrals remain unsupported. Exported
+constant-P/Q devices are validated separately; feeder reference convergence and
+independent whole-feeder validation remain separate gates.
 
 Use Algorithm 1's sum of maximum intra-cluster magnitude errors (SMICE), with
 a separate maximum per-phase error feasibility threshold. Document that
@@ -73,8 +86,10 @@ stopped because of a target, infeasibility, iteration limit, or resource limit.
 
 ## Deferred Scope and Upstream Dependencies
 
-Explicit neutrals, split-phase, meshed-input reduction, GPU acceleration, and
-OPF disaggregation are deferred. The optional flow extra enables reference
+Explicit/floating neutrals, arbitrary split-phase device physics, ZIP evaluation,
+profile-driven time-series validation, meshed-input reduction, GPU acceleration,
+batch percentage CLI export, and OPF disaggregation are deferred. The optional
+flow extra enables reference
 generation through the GDM adapter. True sparse assembly is an
 upstream gdm-flow requirement before utility-scale benchmarks: its current
 `sparse=True` path first allocates a dense matrix. Keep private utility data and

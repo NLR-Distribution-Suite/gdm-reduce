@@ -64,7 +64,9 @@ def main() -> None:
             f"max error {step.max_voltage_error_pu:.6g} pu; "
             f"{step.feasible_candidates}/{step.evaluated_candidates} feasible"
         )
-    print("Numerical equivalent only; reduced GDM feeder export is not implemented.")
+    print(
+        "Numerical equivalent only; use --export-gdm in the CLI for equipment export."
+    )
 
 
 if __name__ == "__main__":

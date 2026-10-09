@@ -25,7 +25,7 @@ def cli_backend(monkeypatch):
     bases = np.full(3, 120.0)
     fingerprint = configuration_fingerprint(network, bases)
 
-    def references(system, *, load_scales, provenance):
+    def references(system, *, load_scales, provenance, assume_center_taps_grounded):
         scenarios = []
         for index, scale in enumerate(load_scales):
             currents = np.array([3, -1, -2]) * scale
@@ -39,7 +39,13 @@ def cli_backend(monkeypatch):
                     fingerprint,
                     True,
                     0,
-                    {**provenance, "load_scale": str(scale)},
+                    {
+                        **provenance,
+                        "load_scale": str(scale),
+                        "center_tap_grounding": "assumed-grounded"
+                        if assume_center_taps_grounded
+                        else "model-grounded",
+                    },
                 )
             )
         return ScenarioLibrary(network, bases, scenarios)

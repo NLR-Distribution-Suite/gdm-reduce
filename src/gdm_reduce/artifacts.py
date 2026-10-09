@@ -19,6 +19,7 @@ from .scenarios import ScenarioLibrary
 from .validation import evaluate_reduction, pool_scenario_currents
 
 SCHEMA = "gdm-reduce-result-v1"
+SPLIT_PHASE_SCHEMA = "gdm-reduce-result-v2"
 KIND = "radial-prescribed-current-equivalent"
 
 
@@ -86,10 +87,22 @@ def build_result_bundle(
     network = result.equivalent.reduced_network
     matrix = network.admittance
     return {
-        "schema": SCHEMA,
+        "schema": SPLIT_PHASE_SCHEMA if training.service_domains else SCHEMA,
         "kind": KIND,
         "gdm_model_exported": False,
         "configuration_fingerprint": selection.configuration_fingerprint,
+        **(
+            {
+                "service_domains": dict(training.service_domains),
+                "center_tap_grounding": training.scenarios[0].provenance.get(
+                    "center_tap_grounding", "external-reference"
+                ),
+                "grounding_mode": "grounded-reference",
+                "split_phase_contract": "grounded-center-tap-v1",
+            }
+            if training.service_domains
+            else {}
+        ),
         "units": {
             "admittance": "siemens",
             "voltage": "volt",
@@ -147,7 +160,10 @@ def build_result_bundle(
 
 def network_from_result_bundle(bundle: Mapping) -> ElectricalNetwork:
     """Decode the numerical equivalent only; this does not load a GDM feeder."""
-    if bundle.get("schema") != SCHEMA or bundle.get("kind") != KIND:
+    if (
+        bundle.get("schema") not in {SCHEMA, SPLIT_PHASE_SCHEMA}
+        or bundle.get("kind") != KIND
+    ):
         raise ValueError("Unsupported result bundle schema or kind.")
     try:
         equivalent = bundle["equivalent"]
@@ -173,9 +189,33 @@ def network_from_result_bundle(bundle: Mapping) -> ElectricalNetwork:
         }
         if len(sources) != len(records):
             raise ValueError("Duplicate sources.")
-        return ElectricalNetwork(
+        network = ElectricalNetwork(
             admittance, tuple(tuple(label) for label in equivalent["labels"]), sources
         )
+        split_buses = {bus for bus, phase in network.labels if phase in {"S1", "S2"}}
+        if split_buses or bundle.get("schema") == SPLIT_PHASE_SCHEMA:
+            domains = bundle["service_domains"]
+            original_split = {
+                bus for bus, phase in bundle["original_labels"] if phase in {"S1", "S2"}
+            }
+            if (
+                bundle.get("schema") != SPLIT_PHASE_SCHEMA
+                or bundle.get("grounding_mode") != "grounded-reference"
+                or bundle.get("split_phase_contract") != "grounded-center-tap-v1"
+                or not isinstance(domains, dict)
+                or set(domains) != original_split
+                or not split_buses <= set(domains)
+                or any(
+                    not isinstance(domain, str) or not domain
+                    for domain in domains.values()
+                )
+                or any(
+                    domains[bus] != domains[bundle["original_to_retained"][bus]]
+                    for bus in original_split
+                )
+            ):
+                raise ValueError("Invalid split-phase service/grounding metadata.")
+        return network
     except (KeyError, TypeError, ValueError, IndexError) as exc:
         raise ValueError("Invalid numerical equivalent in result bundle.") from exc
 
