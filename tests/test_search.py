@@ -1,13 +1,24 @@
+import json
+from copy import deepcopy
+from importlib.metadata import PackageNotFoundError
+
 import numpy as np
 import pytest
 
-from gdm_reduce import ElectricalNetwork, solve_voltages
+from gdm_reduce import ElectricalNetwork, artifacts, solve_voltages
+from gdm_reduce.artifacts import (
+    build_result_bundle,
+    network_from_result_bundle,
+    save_result_bundle,
+)
+from gdm_reduce.radialization import radialize_reduction
 from gdm_reduce.scenarios import (
     ReferenceScenario,
     ScenarioLibrary,
     configuration_fingerprint,
 )
 from gdm_reduce.search import optimize_kron_reduction
+from gdm_reduce.validation import evaluate_reduction, pool_scenario_currents
 
 
 @pytest.fixture
@@ -152,6 +163,11 @@ def test_missing_phase_receiver_is_excluded_with_mutual_coupling():
             selected.represented_voltage[original_index],
             retained[indices[(root, phase)]],
         )
+    holdout = make_library(network, library.voltage_bases, [0, 0, 0, -20, 0])
+    report = evaluate_reduction(selected, holdout, voltage_error_limit_pu=1)
+    assert report.scenarios[0].max_voltage_angle_error_deg > 0
+    radial = radialize_reduction(selected, EDGES)
+    assert evaluate_reduction(radial, holdout, voltage_error_limit_pu=1) == report
 
 
 def test_incompatible_voltage_bases_prevent_pooling(chain_library):
@@ -270,3 +286,190 @@ def test_single_bus_source_only_network():
     selected = optimize_kron_reduction(library, ())
     assert selected.retained_buses == ("source",)
     assert selected.termination_reason == "no_feasible_merge"
+
+
+def test_frozen_clusters_can_fail_unseen_stress_conditions(chain_library):
+    selected = optimize_kron_reduction(
+        chain_library, EDGES, voltage_error_limit_pu=0.002
+    )
+    trained = evaluate_reduction(selected, chain_library, voltage_error_limit_pu=0.002)
+    assert trained.passed
+    assert trained.max_voltage_magnitude_error_pu == pytest.approx(
+        selected.max_voltage_error_pu
+    )
+    holdout = make_library(
+        chain_library.network, chain_library.voltage_bases, [12, -4, -8]
+    )
+    report = evaluate_reduction(selected, holdout, voltage_error_limit_pu=0.002)
+    assert not report.passed
+    assert report.max_voltage_magnitude_error_pu == pytest.approx(0.8 / 120)
+    assert report.scenarios[0].full_network_max_complex_error_pu < 1e-12
+    np.testing.assert_allclose(
+        pool_scenario_currents(selected, holdout)[:, 0], [12, -12, 0]
+    )
+    assert selected.original_to_retained["load"] == "middle"
+    np.testing.assert_allclose(selected.aggregated_currents[:, 1], [3, -3, 0])
+
+
+def test_result_bundle_round_trip_replays_holdout_and_preserves_failure(
+    chain_library, tmp_path
+):
+    selected = optimize_kron_reduction(
+        chain_library, EDGES, voltage_error_limit_pu=0.002
+    )
+    radial = radialize_reduction(selected, EDGES)
+    holdout = make_library(
+        chain_library.network, chain_library.voltage_bases, [12, -4, -8]
+    )
+    bundle = build_result_bundle(
+        radial,
+        chain_library,
+        holdout,
+        voltage_error_limit_pu=0.002,
+        timings_s={"search": 0.1},
+    )
+    path = tmp_path / "results" / "reduction.json"
+    save_result_bundle(path, bundle)
+    loaded = json.loads(path.read_text())
+    network = network_from_result_bundle(loaded)
+    values = loaded["holdout"]["pooled_retained_currents"]
+    currents = np.array(values["real"]) + 1j * np.array(values["imag"])
+    np.testing.assert_allclose(
+        solve_voltages(network, currents),
+        radial.equivalent.solve(pool_scenario_currents(selected, holdout)),
+    )
+    assert loaded["training"]["report"]["passed"] is True
+    assert loaded["holdout"]["report"]["passed"] is False
+    assert loaded["gdm_model_exported"] is False
+    assert loaded["timings_s"] == {"search": 0.1}
+    with pytest.raises(FileExistsError):
+        save_result_bundle(path, bundle)
+    save_result_bundle(path, bundle, overwrite=True)
+
+
+def test_reverse_flow_uses_frozen_clusters(chain_library):
+    selected = optimize_kron_reduction(
+        chain_library, EDGES, voltage_error_limit_pu=0.002
+    )
+    holdout = make_library(
+        chain_library.network, chain_library.voltage_bases, [-6, 2, 4]
+    )
+    report = evaluate_reduction(selected, holdout, voltage_error_limit_pu=0.004)
+    assert report.passed
+    assert report.max_voltage_magnitude_error_pu == pytest.approx(0.4 / 120)
+    np.testing.assert_allclose(
+        pool_scenario_currents(selected, holdout)[:, 0], [-6, 6, 0]
+    )
+
+
+@pytest.mark.parametrize("kind", ["matrix", "source", "bases", "indexing"])
+def test_incompatible_holdouts_are_rejected(chain_library, kind):
+    original = chain_library.network
+    matrix = original.admittance * (2 if kind == "matrix" else 1)
+    labels = original.labels[::-1] if kind == "indexing" else original.labels
+    sources = {("source", "A"): 121 if kind == "source" else 120}
+    network = ElectricalNetwork(matrix, labels, sources)
+    bases = chain_library.voltage_bases * (2 if kind == "bases" else 1)
+    holdout = make_library(network, bases, [3, -1, -2])
+    selected = optimize_kron_reduction(
+        chain_library, EDGES, voltage_error_limit_pu=0.002
+    )
+    with pytest.raises(ValueError, match="selected configuration"):
+        evaluate_reduction(selected, holdout)
+
+
+@pytest.mark.parametrize("limit", [-1, np.nan, np.inf])
+def test_invalid_evaluation_limits(chain_library, limit):
+    selected = optimize_kron_reduction(chain_library, EDGES)
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        evaluate_reduction(selected, chain_library, voltage_error_limit_pu=limit)
+
+
+def test_zero_representative_has_undefined_angle(chain_library):
+    bases = np.array([120.0, 240.0, 240.0])
+    training = make_library(chain_library.network, bases, [3, -1, -2])
+    selected = optimize_kron_reduction(
+        training,
+        EDGES,
+        protected_buses={"load"},
+        voltage_error_limit_pu=1,
+    )
+    holdout = make_library(chain_library.network, bases, [600, -200, -400])
+    report = evaluate_reduction(selected, holdout)
+    assert report.scenarios[0].max_voltage_angle_error_deg is None
+    assert not report.passed
+
+
+def test_source_power_uses_electrical_currents_not_bookkeeping(chain_library):
+    matrix = chain_library.network.admittance.toarray()
+    matrix[2, 2] += 1
+    network = ElectricalNetwork(
+        matrix, chain_library.network.labels, chain_library.network.source_voltages
+    )
+    library = make_library(network, chain_library.voltage_bases, [3, -1, -2])
+    selected = optimize_kron_reduction(library, EDGES, voltage_error_limit_pu=1)
+    pooled = pool_scenario_currents(selected, library)
+    voltage = solve_voltages(network, pooled)
+    actual = network.admittance @ voltage
+    reference_power = library.voltage[0] * np.conj(library.currents[0])
+    expected = (voltage[0] * np.conj(actual[0]) - reference_power).real
+    report = evaluate_reduction(selected, library, voltage_error_limit_pu=1)
+    assert report.scenarios[0].source_active_power_error_w == pytest.approx(expected[0])
+    assert abs(actual[0, 0] - pooled[0, 0]) > 0.1
+
+
+def test_nonfinite_electrical_voltage_is_rejected(chain_library, monkeypatch):
+    selected = optimize_kron_reduction(chain_library, EDGES)
+    monkeypatch.setattr(
+        type(selected.equivalent),
+        "reconstruct",
+        lambda *args: np.full(chain_library.voltage.shape, np.nan),
+    )
+    with pytest.raises(ValueError, match="nonfinite"):
+        evaluate_reduction(selected, chain_library)
+
+
+@pytest.mark.parametrize("timings", [{"search": -1}, {"search": np.nan}, {1: 0}])
+def test_invalid_bundle_timings(chain_library, timings):
+    selected = optimize_kron_reduction(chain_library, EDGES)
+    radial = radialize_reduction(selected, EDGES)
+    with pytest.raises(ValueError, match="Timings"):
+        build_result_bundle(radial, chain_library, chain_library, timings_s=timings)
+
+
+def test_bundle_without_optional_backend_version(chain_library, monkeypatch):
+    original = artifacts.version
+
+    def package_version(name):
+        if name == "gdm-flow":
+            raise PackageNotFoundError(name)
+        return original(name)
+
+    monkeypatch.setattr(artifacts, "version", package_version)
+    selected = optimize_kron_reduction(chain_library, EDGES)
+    radial = radialize_reduction(selected, EDGES)
+    bundle = build_result_bundle(radial, chain_library, chain_library)
+    assert bundle["environment"]["versions"]["gdm-flow"] is None
+
+
+@pytest.mark.parametrize(
+    "kind", ["schema", "kind", "missing", "csr", "offsets", "complex", "sources"]
+)
+def test_malformed_bundle_is_rejected(chain_library, kind):
+    selected = optimize_kron_reduction(chain_library, EDGES)
+    radial = radialize_reduction(selected, EDGES)
+    bundle = deepcopy(build_result_bundle(radial, chain_library, chain_library))
+    if kind in {"schema", "kind"}:
+        bundle[kind] = "unsupported"
+    elif kind == "missing":
+        del bundle["equivalent"]
+    elif kind == "csr":
+        bundle["equivalent"]["admittance"]["indices"][0] = 100
+    elif kind == "offsets":
+        bundle["equivalent"]["admittance"]["indptr"][0] = 0.5
+    elif kind == "complex":
+        bundle["equivalent"]["admittance"]["imag"] = [0]
+    else:
+        bundle["equivalent"]["source_voltages"] *= 2
+    with pytest.raises(ValueError):
+        network_from_result_bundle(bundle)

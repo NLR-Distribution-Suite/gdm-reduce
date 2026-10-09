@@ -162,6 +162,79 @@ the result reports their maximum difference. Coupled and missing A/B/C phases
 are preserved. This remains a numerical equivalent, not GDM feeder equipment
 or nonlinear validation.
 
+## Held-Out Validation
+
+```python
+from gdm_reduce import evaluate_reduction
+
+holdout = build_gdm_scenario_library(system, load_scales=[0.75, 1.25])
+report = evaluate_reduction(radial, holdout, voltage_error_limit_pu=0.001)
+print(report.passed, report.max_voltage_magnitude_error_pu)
+```
+
+Evaluation freezes the selected clusters, applies them to new reference currents,
+and checks the configuration fingerprint before solving. It does not re-optimize
+on holdouts. Per-scenario reports separate magnitude, complex-voltage and wrapped
+angle errors, full-network reference consistency, backend convergence mismatch,
+and KCL residual. An angle error is `None` if a representative voltage is zero.
+Power diagnostics use electrical reconstruction and actual `YV` currents, not
+the ignored pooled source entries. Signed power differences are reduced minus
+reference; passive active absorption includes every passive element in the matrix,
+not just line losses. These are diagnostics, not thermal or nonlinear certificates.
+
+The evaluator accepts training or held-out references; callers own the split.
+Tests exercise unseen heavier demand, reverse flow and phase-specific changes,
+including a stress case that passes training and fails the held-out threshold.
+
+## CLI And Result Bundles
+
+```sh
+python -m pip install -e '.[dev,flow]'
+gdm-reduce ../gdm-flow/tests/data/ieee-13/gdm/ieee13_system.json \
+  --train-load-scales 0.5 1.0 --holdout-load-scales 0.75 1.25 \
+  --voltage-error-limit-pu 0.001 --output results/ieee13.json
+```
+
+The CLI rejects overlapping training/holdout scales. It saves a failed validation
+report rather than silently changing the clusters. Exit codes: `0` when both
+reports pass the magnitude limit, `1` for a validation failure, `2` for invalid
+arguments, incompatible configurations, solver failures or file errors. Without
+`--output`, the JSON bundle is printed to stdout. Existing files require explicit
+`--overwrite`. `python -m gdm_reduce.cli` is also available.
+
+The `gdm-reduce-result-v1` bundle stores the reduced CSR matrix, fixed source
+phasors, original/retained indexing, clusters and UUID mappings, restored junctions,
+step history, reference and pooled currents, separate reports, and provenance.
+It is explicitly labeled `radial-prescribed-current-equivalent`, with
+`gdm_model_exported: false`. It is **not** accepted as a GDM feeder model.
+
+```python
+import json
+from pathlib import Path
+import numpy as np
+from gdm_reduce import network_from_result_bundle, solve_voltages
+
+bundle = json.loads(Path("results/ieee13.json").read_text())
+network = network_from_result_bundle(bundle)
+values = bundle["holdout"]["pooled_retained_currents"]
+currents = np.array(values["real"]) + 1j * np.array(values["imag"])
+retained_voltage = solve_voltages(network, currents)
+```
+
+`build_result_bundle()` and `save_result_bundle()` provide the same artifact API
+for programmatic workflows. The decoder validates the numerical equivalent;
+it does not certify manually edited reports or reconstruct original equipment.
+
+Per-stage wall-clock timings, package/Python/platform versions, CPU count and
+BLAS/OpenMP thread environment settings are recorded for reproducible CPU runs.
+Compare repeated runs on matching hardware and thread settings; these are
+single-run measurements, not hardware-independent performance guarantees.
+Current dense-first gdm-flow assembly still prevents utility-scale claims.
+
+IEEE-13 is exercised with 0.5/1.0 training and 0.75/1.25 holdout snapshots. This
+does not establish independent OpenDSS baseline fidelity or nonlinear reduced
+GDM device behavior; those release/export gates remain open.
+
 ## Development
 
 ```sh

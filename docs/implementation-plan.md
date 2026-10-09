@@ -31,8 +31,13 @@ provides independent reference validation. Do not duplicate the stamping code.
   equivalence. Synthetic branching/coupled/missing-phase cases and IEEE-13 are
   exercised. Final bus counts include restored zero-injection junctions; this
   is structural restoration, not equipment reconstruction or nonlinear validation.
-5. **Validated alpha release:** CLI, versioned result bundles, synthetic and
-   IEEE examples, held-out scenario reports, and reproducible CPU benchmarks.
+5. **Validated alpha release (tooling implemented; certification pending):** CLI
+  with independent train/holdout load-scale splits and failure exit codes;
+  versioned, replayable numerical JSON bundles; frozen-cluster magnitude,
+  complex/angle and electrical power diagnostics; synthetic stress, reverse-flow
+  and phase-specific tests; IEEE-13 holdout runs; per-stage CPU timings and
+  environment metadata. Independent baseline fidelity, representative benchmark
+  campaigns and nonlinear deployment certification remain open release gates.
 6. **GDM feeder export:** supported equipment reconstruction, device/time-series
    lineage, and independent nonlinear electrical validation. Reject unsupported
    equivalents instead of claiming all Schur matrices are ordinary feeders.

@@ -104,3 +104,35 @@ junction voltages are electrical solutions, not the representative root values
 assigned during training-error scoring. Equipment realizability, nonlinear
 device aggregation, holdouts, and independent feeder validation remain separate
 release/export gates.
+
+## Frozen-Cluster Evaluation And Artifacts
+
+Evaluation requires the original terminal order, matrix, voltage bases, fixed
+sources and model signature to match the selection fingerprint. Pool new
+reference currents with the existing assignment; do not select new clusters
+using held-out voltages. Magnitude and complex-voltage errors use each original
+terminal's nominal phase base and the assigned root's voltage. Angle differences
+are wrapped to [-180, 180] degrees; a zero representative makes the scenario's
+maximum angle error undefined (`None`).
+
+Report the full-network complex-voltage reconstruction error separately from
+the reduction errors, backend convergence mismatch and reference KCL residual.
+Source P/Q and passive active-absorption differences use electrically reconstructed
+voltages and actual `YV` currents, not assignment-root voltages or pooled source
+bookkeeping. These differences are signed reduced minus reference. Passive
+absorption includes all passive elements represented by Y and is not labeled
+as line-only loss or independently validated operating behavior.
+
+The magnitude limit alone determines the report pass flag. Other diagnostics
+remain explicit and are not hidden in that flag. The CLI rejects overlapping
+training/holdout load scales, records per-stage timing/environment metadata,
+and emits reports even on validation failure. The programmatic caller owns
+the reference split and must not treat repeated training data as independent
+held-out evidence.
+
+Versioned JSON artifacts contain CSR data in SI units, fixed sources, labels,
+mapping/lineage, separate reference/current snapshots and diagnostics. Decoding
+validates sparse structure and the numerical network; no LU caches or GDM
+equipment models are serialized. Existing files are not overwritten without
+explicit permission. A saved matrix can replay its retained-current solve,
+but does not establish physical equipment realizability or nonlinear accuracy.
