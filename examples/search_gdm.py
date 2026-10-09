@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from gdm.distribution import DistributionSystem
+from gdm.systems.distribution import DistributionSystem
 
 from gdm_reduce import (
     build_gdm_scenario_library,

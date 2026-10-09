@@ -7,8 +7,8 @@ from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
-from gdm.distribution import DistributionSystem
-from gdm.distribution.components import (
+from gdm.systems.distribution import DistributionSystem
+from gdm.systems.distribution.components import (
     DistributionBattery,
     DistributionBus,
     DistributionCapacitor,
@@ -19,7 +19,7 @@ from gdm.distribution.components import (
     MatrixImpedanceBranch,
     MatrixImpedanceSwitch,
 )
-from gdm.distribution.enums import Phase, VoltageTypes
+from gdm.systems.distribution.enums import Phase, VoltageTypes
 from scipy.sparse import csr_matrix
 
 from gdm_reduce import (

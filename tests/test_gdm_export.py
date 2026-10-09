@@ -3,12 +3,21 @@ from uuid import uuid4
 
 import numpy as np
 import pytest
-from gdm.distribution import DistributionSystem
-from gdm.distribution.components import (
+from gdm.systems.distribution import DistributionSystem
+from gdm.systems.distribution.components import (
     DistributionBus,
     DistributionLoad,
+    DistributionReactor,
+    DistributionTransformer,
     DistributionVoltageSource,
     MatrixImpedanceBranch,
+    MatrixImpedanceSwitch,
+)
+from gdm.systems.distribution.equipment import (
+    CircuitBreakerEquipment,
+    DisconnectorEquipment,
+    EarthingSwitchEquipment,
+    PowerTransformerEquipment,
 )
 from infrasys import SingleTimeSeries
 
@@ -98,6 +107,64 @@ def test_export_contracts_series_path_and_preserves_original(export_case, tmp_pa
         reloaded, v0_complex={}, tolerance=1e-8
     )
     assert reference.success
+
+
+@pytest.mark.parametrize(
+    "device_type",
+    [
+        DistributionReactor,
+        CircuitBreakerEquipment,
+        DisconnectorEquipment,
+        EarthingSwitchEquipment,
+        PowerTransformerEquipment,
+    ],
+)
+def test_export_preserves_gdm24_device_boundaries(export_case, device_type, tmp_path):
+    system, _, _, _ = export_case
+    end = system.get_component(DistributionBus, "end")
+    terminal = end.model_copy(
+        deep=True, update={"uuid": uuid4(), "name": "device-terminal"}
+    )
+    if device_type is DistributionReactor:
+        device = DistributionReactor.example()
+        device.buses = [end, terminal]
+    elif device_type is PowerTransformerEquipment:
+        device = DistributionTransformer.example()
+        device.equipment = PowerTransformerEquipment.example()
+        device.equipment.windings[1].is_grounded = True
+        terminal.rated_voltage = type(terminal.rated_voltage)(400, "volt")
+        terminal.voltage_type = "line-to-line"
+        device.buses = [end, terminal]
+    else:
+        device = MatrixImpedanceSwitch.example()
+        device.equipment = device_type.example()
+        device.buses = [end, terminal]
+    system.add_component(device)
+    reference = solve_ac_power_flow_from_components(
+        system, v0_complex={}, tolerance=1e-8
+    )
+    assert reference.success
+    library = from_gdm_flow_results(system, {"nominal": reference})
+    constraints = get_gdm_search_constraints(system, library)
+    assert {end.name, terminal.name} <= constraints.protected_buses
+    selection = optimize_kron_reduction(
+        library,
+        constraints.bus_edges,
+        protected_buses=constraints.protected_buses,
+        voltage_error_limit_pu=1.0,
+        target_reduction_fraction=0.25,
+    )
+    radial = radialize_reduction(selection, constraints.bus_edges)
+    export = build_reduced_gdm(system, radial, library)
+    path = tmp_path / "station-reduced.json"
+    save_reduced_gdm(export, path)
+    restored = DistributionSystem.from_json(path)
+    copied_device = restored.get_component_by_uuid(device.uuid)
+    assert type(copied_device) is type(device)
+    assert type(copied_device.equipment) is type(device.equipment)
+    assert copied_device.model_dump(mode="json") == device.model_dump(mode="json")
+    assert len(list(restored.get_components(DistributionBus))) == 3
+    assert export.report["ybus_verification"]["max_absolute_error_s"] < 1e-6
 
 
 def test_export_requires_explicit_line_charging_policy(export_case):

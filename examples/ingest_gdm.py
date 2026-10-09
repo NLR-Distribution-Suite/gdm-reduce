@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-from gdm.distribution import DistributionSystem
+from gdm.systems.distribution import DistributionSystem
 
 from gdm_reduce import build_gdm_scenario_library, kron_reduce
 

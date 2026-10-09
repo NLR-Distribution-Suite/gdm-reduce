@@ -16,7 +16,8 @@ ingestion are available through the optional gdm-flow integration.
 
 ## Install
 
-Python 3.11 or newer is required. This is an alpha source release. From a
+Python 3.11+ and grid-data-models 2.4.0+ are required. Imports use the canonical
+`gdm.systems.distribution` namespace. This is an alpha source release. From a
 repository checkout, install the core package or the optional GDM power-flow
 integration:
 
@@ -61,7 +62,7 @@ python examples/ingest_gdm.py /path/to/model.json
 ```
 
 ```python
-from gdm.distribution import DistributionSystem
+from gdm.systems.distribution import DistributionSystem
 from gdm_reduce import build_gdm_scenario_library
 
 system = DistributionSystem.from_json("model.json")
@@ -94,6 +95,16 @@ Center taps are treated as grounded under the assumption below. The updated
 stamper includes nonnegative no-load core losses and accepts complete zero- or
 one-based winding-pair indices. These features do not by themselves establish
 reference convergence or independent baseline fidelity for every feeder.
+
+## GDM 2.4 Station Equipment
+
+With the updated gdm-flow backend, series reactors and supported two-winding
+station transformers participate in AC references. Reactor, transformer, and
+switch terminals are protected during candidate selection. Export retains these
+devices, their concrete equipment types, UUIDs, and nameplate metadata; only
+plain matrix-impedance line paths are synthesized or contracted. Station breaker,
+disconnector, and earthing equipment retain their static switch states. Protection
+trips, thermal behavior, and unsupported transformer layouts are not simulated.
 
 ## Ground-Referenced Split Phase
 

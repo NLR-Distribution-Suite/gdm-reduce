@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("Output exists; choose another path or pass --overwrite.")
     timings = {}
     try:
-        from gdm.distribution import DistributionSystem
+        from gdm.systems.distribution import DistributionSystem
 
         started = perf_counter()
         system = DistributionSystem.from_json(str(arguments.model))

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from gdm.distribution import DistributionSystem
+from gdm.systems.distribution import DistributionSystem
 
 from gdm_reduce import (
     ElectricalNetwork,

@@ -2,15 +2,15 @@ from uuid import uuid4
 
 import numpy as np
 import pytest
-from gdm.distribution import DistributionSystem
-from gdm.distribution.components import (
+from gdm.systems.distribution import DistributionSystem
+from gdm.systems.distribution.components import (
     DistributionBus,
     DistributionLoad,
     DistributionTransformer,
     DistributionVoltageSource,
     MatrixImpedanceBranch,
 )
-from gdm.distribution.enums import Phase, VoltageTypes
+from gdm.systems.distribution.enums import Phase, VoltageTypes
 
 from gdm_reduce import (
     ElectricalNetwork,
@@ -404,7 +404,7 @@ def test_loaded_service_matches_opendss(grounded_system, line_to_line, scale):
     dss = pytest.importorskip("opendssdirect")
     if line_to_line:
         sample = next(grounded_system.get_components(DistributionLoad))
-        from gdm.distribution.enums import ConnectionType
+        from gdm.systems.distribution.enums import ConnectionType
 
         phase_loads = [
             sample.equipment.phase_loads[0].model_copy(

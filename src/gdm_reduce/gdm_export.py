@@ -9,20 +9,20 @@ from uuid import NAMESPACE_URL, uuid5
 
 import networkx as nx
 import numpy as np
-from gdm.distribution import DistributionSystem
-from gdm.distribution.components import (
+from gdm.systems.distribution import DistributionSystem
+from gdm.systems.distribution.components import (
     DistributionBus,
     DistributionLoad,
     DistributionTransformer,
     MatrixImpedanceBranch,
 )
-from gdm.distribution.components.base.distribution_branch_base import (
+from gdm.systems.distribution.components.base.distribution_branch_base import (
     DistributionBranchBase,
 )
-from gdm.distribution.components.base.distribution_switch_base import (
+from gdm.systems.distribution.components.base.distribution_switch_base import (
     DistributionSwitchBase,
 )
-from gdm.distribution.equipment import MatrixImpedanceBranchEquipment
+from gdm.systems.distribution.equipment import MatrixImpedanceBranchEquipment
 
 from .adapters import get_gdm_search_constraints
 from .radialization import RadializationResult

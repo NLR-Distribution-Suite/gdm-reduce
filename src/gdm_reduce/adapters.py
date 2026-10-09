@@ -19,7 +19,7 @@ from .scenarios import (
 )
 
 if TYPE_CHECKING:
-    from gdm.distribution import DistributionSystem
+    from gdm.systems.distribution import DistributionSystem
     from gdm_flow.ac_pf import ACPowerFlowResult
 
 
@@ -36,19 +36,20 @@ def get_gdm_search_constraints(
 ) -> GDMSearchConstraints:
     """Extract topology without inferring branch edges from mutual Y entries.
 
-    Sources, transformer/regulator/switch boundaries, DER, capacitors, and
+    Sources, transformer/regulator/switch/reactor boundaries, DER, capacitors, and
     controller measurement buses are retained. Open switches contribute no
     edge. The search kernel separately verifies connected radial topology.
     """
-    from gdm.distribution.components import (
+    from gdm.systems.distribution.components import (
         DistributionBattery,
         DistributionBranchBase,
         DistributionCapacitor,
+        DistributionReactor,
         DistributionRegulator,
         DistributionSolar,
         DistributionTransformer,
     )
-    from gdm.distribution.components.base.distribution_switch_base import (
+    from gdm.systems.distribution.components.base.distribution_switch_base import (
         DistributionSwitchBase,
     )
 
@@ -65,7 +66,7 @@ def get_gdm_search_constraints(
         is_transformer = isinstance(
             component, DistributionTransformer | DistributionRegulator
         )
-        if is_switch or is_transformer:
+        if is_switch or is_transformer or isinstance(component, DistributionReactor):
             protected.update(bus.name for bus in terminals)
         if isinstance(component, DistributionBranchBase) or is_transformer:
             if not is_switch or any(component.is_closed):
@@ -97,8 +98,8 @@ def _model_signature(system: DistributionSystem) -> str:
 def _metadata(
     system: DistributionSystem, labels: Sequence[BusPhaseLabel]
 ) -> tuple[np.ndarray, dict[str, str], dict[str, tuple[str, ...]]]:
-    from gdm.distribution.components import DistributionBus
-    from gdm.distribution.enums import VoltageTypes
+    from gdm.systems.distribution.components import DistributionBus
+    from gdm.systems.distribution.enums import VoltageTypes
 
     buses = {bus.name: bus for bus in system.get_components(DistributionBus)}
     expected_labels = {
@@ -146,7 +147,7 @@ def audit_split_phase_grounding(
     system: DistributionSystem,
 ) -> tuple[dict[str, str], ...]:
     """List unsupported center-tap grounding without changing model metadata."""
-    from gdm.distribution.components import DistributionTransformer
+    from gdm.systems.distribution.components import DistributionTransformer
 
     issues = []
     for transformer in system.get_components(DistributionTransformer):
@@ -178,7 +179,7 @@ def _split_phase_domains(
     system: DistributionSystem, *, assume_center_taps_grounded: bool = True
 ) -> dict[str, str]:
     import networkx as nx
-    from gdm.distribution.components import (
+    from gdm.systems.distribution.components import (
         DistributionBranchBase,
         DistributionBus,
         DistributionTransformer,
@@ -243,7 +244,7 @@ def _split_phase_domains(
                 "grounded center-tap transformer."
             )
         domains.update({bus: next(iter(identities)) for bus in members})
-    from gdm.distribution.components import DistributionLoad
+    from gdm.systems.distribution.components import DistributionLoad
 
     for component in system.iter_all_components():
         if (
@@ -431,7 +432,10 @@ def build_gdm_scenario_library(
             raise
         raise RuntimeError("Install with pip install 'gdm-reduce[flow]'.") from exc
     working_system = system.deepcopy()
-    from gdm.distribution.components import DistributionBus, DistributionTransformer
+    from gdm.systems.distribution.components import (
+        DistributionBus,
+        DistributionTransformer,
+    )
 
     labels = tuple(
         (bus.name, phase.value)
