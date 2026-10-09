@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-dependencies = ["numpy>=1.24", "scipy>=1.10", "grid-data-models>=2.3.7"]
+dependencies = ["numpy>=1.24", "scipy>=1.10", "networkx>=3", "grid-data-models>=2.3.7"]
 
 [project.urls]
 Repository = "https://github.com/NLR-Distribution-Suite/gdm-reduce"

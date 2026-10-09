@@ -3,14 +3,14 @@
 Phase-aware Kron reduction for distribution systems in the
 [NLR Distribution Suite](https://github.com/NLR-Distribution-Suite).
 
-This alpha implements exact source-conditioned electrical reduction. It uses
+This alpha implements exact source-conditioned electrical reduction and
+phase-aware Opti-KRON candidate search. It uses
 existing A/B/C bus-phase terminals, retains whole buses, preserves phase
 coupling, and reconstructs eliminated voltages using sparse factorized solves.
 
 **This is a prescribed-current numerical equivalent, not an aggregated
-nonlinear power-flow model or an OPF feasibility certificate.** Opti-KRON
-candidate selection, radialization, and equipment export are planned but not
-yet implemented. GDM metadata and fixed-configuration reference-scenario
+nonlinear power-flow model or an OPF feasibility certificate.** Radialization
+and reduced GDM feeder export are not yet implemented. GDM metadata and fixed-configuration reference-scenario
 ingestion are available through the optional gdm-flow integration.
 
 ## Install
@@ -90,6 +90,49 @@ The supplied IEEE-13 model is exercised end to end. IEEE-123 must include its
 referenced `ieee_123_node_time_series` companion storage before GDM can load it.
 The supplied P4U model includes S1/S2 terminals and is explicitly outside the
 current A/B/C adapter scope; no phases or storage metadata are silently dropped.
+
+## Candidate Search
+
+```sh
+python examples/search_gdm.py ../gdm-flow/tests/data/ieee-13/gdm/ieee13_system.json
+```
+
+```python
+from gdm_reduce import get_gdm_search_constraints, optimize_kron_reduction
+
+constraints = get_gdm_search_constraints(system, library)
+selected = optimize_kron_reduction(
+    library,
+    constraints.bus_edges,
+    protected_buses=constraints.protected_buses,
+    voltage_error_limit_pu=0.001,
+    target_reduction_fraction=0.5,
+)
+retained_voltage = selected.equivalent.solve(selected.aggregated_currents)
+```
+
+Search enumerates adjacent whole-bus merges on a connected radial input graph.
+The removed bus's phases must exist at the receiver, with matching nominal
+phase-voltage bases. GDM topology comes from active physical equipment, not
+off-diagonal admittance entries. Sources, transformer/regulator/switch boundaries,
+DER, capacitors, and controller measurement buses are conservatively protected.
+Caller-specified protected buses can be added to this set. Configuration checks
+reject a GDM model changed since reference generation.
+
+Candidates pool the accumulated cluster currents at the receiver. Algorithm 1's
+SMICE objective sums cluster-wise maximum magnitude errors over scenarios;
+a separate maximum original-terminal error enforces feasibility. Every step
+checks all original terminals against the original references, not just surviving
+buses. Candidate solves reuse one sparse LU in bounded batches. Ties within
+1e-12 pu use receiver/removed bus-name order. This is exhaustive one-merge search,
+not a globally optimal partition or a held-out/nonlinear accuracy guarantee.
+
+`selected` contains clusters, complete name and UUID mappings, original-index
+pooled currents, represented training voltages, step diagnostics, a stop reason,
+and a `KronReductionResult`. **It is not a GDM `DistributionSystem`.** The eventual
+export requires radialization, supported equipment reconstruction, and independent
+nonlinear validation. Use `selected.aggregated_currents`, rather than the original
+library currents, to solve the selected current-pooled equivalent.
 
 ## Development
 

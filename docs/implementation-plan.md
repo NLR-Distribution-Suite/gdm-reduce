@@ -17,9 +17,13 @@ provides independent reference validation. Do not duplicate the stamping code.
   source, KCL residual, and reference-convergence validation. Generates static
   load-scale snapshots and ingests caller-provided converged results; temporal
   profile interpretation and independent reference validation remain future work.
-3. **Candidate search:** whole-bus phase-compatible adjacent cluster merges,
-   protected source/transformer/control/DER buses, accumulated cluster currents,
-   original-scenario error checks, deterministic ties, and bounded batches.
+3. **Candidate search (implemented):** whole-bus phase-compatible adjacent cluster
+  merges on radial input graphs; matching nominal voltage bases; protected
+  source/transformer/regulator/switch/control/DER/capacitor buses; accumulated
+  cluster currents; original-terminal scenario error checks; deterministic ties;
+  bounded batches; complete name/UUID mappings; and numerical equivalents.
+  IEEE-13 ingestion and search are exercised together. Output is not yet a
+  reduced GDM feeder or a validated nonlinear deployment model.
 4. **Radialization:** minimal required junction restoration, unchanged injection
    assignments, radiality tests, and retained-voltage equivalence checks.
 5. **Validated alpha release:** CLI, versioned result bundles, synthetic and

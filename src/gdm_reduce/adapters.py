@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,67 @@ from .scenarios import (
 if TYPE_CHECKING:
     from gdm.distribution import DistributionSystem
     from gdm_flow.ac_pf import ACPowerFlowResult
+
+
+@dataclass(frozen=True)
+class GDMSearchConstraints:
+    """Original physical bus edges and conservative protected equipment buses."""
+
+    bus_edges: tuple[tuple[str, str], ...]
+    protected_buses: frozenset[str]
+
+
+def get_gdm_search_constraints(
+    system: DistributionSystem, library: ScenarioLibrary
+) -> GDMSearchConstraints:
+    """Extract topology without inferring branch edges from mutual Y entries.
+
+    Sources, transformer/regulator/switch boundaries, DER, capacitors, and
+    controller measurement buses are retained. Open switches contribute no
+    edge. The search kernel separately verifies connected radial topology.
+    """
+    from gdm.distribution.components import (
+        DistributionBattery,
+        DistributionBranchBase,
+        DistributionCapacitor,
+        DistributionRegulator,
+        DistributionSolar,
+        DistributionTransformer,
+    )
+    from gdm.distribution.components.base.distribution_switch_base import (
+        DistributionSwitchBase,
+    )
+
+    if library.model_signature != _model_signature(system):
+        raise ValueError("GDM topology must match the reference library configuration.")
+    _metadata(system, library.network.labels)
+    edges = set()
+    protected = {bus for bus, _ in library.network.source_voltages}
+    for component in system.iter_all_components():
+        if not getattr(component, "in_service", True):
+            continue
+        terminals = getattr(component, "buses", ())
+        is_switch = isinstance(component, DistributionSwitchBase)
+        is_transformer = isinstance(
+            component, DistributionTransformer | DistributionRegulator
+        )
+        if is_switch or is_transformer:
+            protected.update(bus.name for bus in terminals)
+        if isinstance(component, DistributionBranchBase) or is_transformer:
+            if not is_switch or any(component.is_closed):
+                edges.update(
+                    tuple(sorted((terminals[0].name, terminal.name)))
+                    for terminal in terminals[1:]
+                )
+        if isinstance(
+            component, DistributionSolar | DistributionBattery | DistributionCapacitor
+        ):
+            protected.add(component.bus.name)
+        for controller in getattr(component, "controllers", ()) or ():
+            controlled_bus = getattr(controller, "controlled_bus", None)
+            if controlled_bus is not None:
+                protected.add(controlled_bus.name)
+    return GDMSearchConstraints(tuple(sorted(edges)), frozenset(protected))
 
 
 def _model_signature(system: DistributionSystem) -> str:
