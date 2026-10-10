@@ -19,7 +19,7 @@ gdm-reduce = "gdm_reduce.cli:main"
 Repository = "https://github.com/NLR-Distribution-Suite/gdm-reduce"
 
 [project.optional-dependencies]
-flow = ["gdm-flow>=0.4.0"]
+flow = ["gdm-flow>=0.5.0"]
 opendss = ["opendssdirect.py>=0.9"]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "pre-commit>=3.7", "build>=1"]
 
