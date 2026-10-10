@@ -12,3 +12,5 @@ dist/
 /results/
 /plots/
 .DS_Store
+docs/_build/
+docs/.ipynb_checkpoints/

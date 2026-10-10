@@ -19,10 +19,63 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install '.[dev]'
+      - run: python -m pip install '.[dev,flow,opendss]'
       - run: pytest --cov=gdm_reduce --cov-report=term-missing
       - run: python examples/exact_reduction.py
       - run: python -m build
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      BASE_URL: /gdm-reduce
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python -m pip install '.[docs,dev,opendss]'
+      - run: python -m ipykernel install --user --name gdm-reduce-docs
+      - run: pytest tests/test_circuit_documentation.py -q
+      - run: >-
+          jupyter nbconvert --to notebook --execute --inplace docs/comparison.ipynb
+          --ExecutePreprocessor.kernel_name=gdm-reduce-docs
+          --ExecutePreprocessor.timeout=9000
+      - run: jupyter-book build --html --strict
+        working-directory: docs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-html
+          path: docs/_build/html
+          if-no-files-found: error
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          path: docs/_build/html
+
+  deploy-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, lint, docs]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   lint:
     runs-on: ubuntu-latest

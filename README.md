@@ -16,6 +16,11 @@ ingestion are available through the optional gdm-flow integration.
 
 ## Install
 
+The executable [Jupyter Book / MyST documentation](docs/index.md) covers
+equations, paper references, model preparation, API and an
+[original-versus-reduced GDM comparison](docs/comparison.ipynb).
+Install `.[docs]` and run `jupyter-book build --html --strict` from `docs`.
+
 Python 3.11+ and grid-data-models 2.4.0+ are required. Imports use the canonical
 `gdm.systems.distribution` namespace. This is an alpha source release. From a
 repository checkout, install the core package or the optional GDM power-flow
@@ -83,11 +88,13 @@ not interpreted by the scenario generator.
 results; callers must supply their original model. Matrices are taken from the
 results, not independently restamped. Fingerprints include the full static GDM
 component serialization, so models differing in UUIDs or static load settings
-are conservatively rejected when mixing references. No utility data is copied.
+are conservatively rejected when mixing references. Copied DiTTo test circuits
+and their provenance are described in the [model catalog](docs/models.md).
 
-External IEEE-13 integration tests discover the sibling gdm-flow data directory.
-Set `GDM_REDUCE_TEST_DATA` to override it. They skip if the data or optional
-backend is unavailable; ordinary consistency tests run without gdm-flow.
+The documentation regression tests use copied DiTTo circuit fixtures without
+network downloads or runtime conversion. Older external IEEE-13 integration
+tests discover sibling gdm-flow data or `GDM_REDUCE_TEST_DATA`; the new copied
+fixture tests do not depend on that discovery. CI installs Flow and OpenDSS.
 
 The supplied IEEE-13 model is exercised end to end. IEEE-123 must include its
 referenced `ieee_123_node_time_series` companion storage before GDM can load it.

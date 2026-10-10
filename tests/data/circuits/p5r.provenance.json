@@ -1,0 +1,12 @@
+{
+  "dataset": "p5r",
+  "source": "gdm_data",
+  "gdmloader_version": "0.0.5",
+  "gdm_version": "2.4.0",
+  "saved_json_sha256": "208ee1c60f3b41355980fe2a94e3e4c4d8106e828c86e64910dcab2d75c590b7",
+  "removed_converter_annotations": [
+    "OpenDSSLoadProperties",
+    "OpenDSSLoadProperties",
+    "OpenDSSTransformerProperties"
+  ]
+}
