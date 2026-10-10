@@ -13,6 +13,37 @@ import numpy as np
 from .models import BusPhaseLabel, ElectricalNetwork
 
 
+def split_phase_voltage_errors(
+    library: ScenarioLibrary, represented: np.ndarray, reference: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Per-snapshot differential voltage and signed leg-imbalance diagnostics."""
+    indices = {label: index for index, label in enumerate(library.network.labels)}
+    pairs = [
+        (indices[(bus, "S1")], indices[(bus, "S2")])
+        for bus in sorted(library.service_domains)
+        if (bus, "S1") in indices and (bus, "S2") in indices
+    ]
+    if not pairs:
+        return tuple(np.zeros(reference.shape[1]) for _ in range(5))
+    first, second = np.asarray(pairs).T
+    bases = (library.voltage_bases[first] + library.voltage_bases[second])[:, None]
+    reference_difference = reference[first] - reference[second]
+    represented_difference = represented[first] - represented[second]
+    reference_imbalance = 2 * (abs(reference[first]) - abs(reference[second])) / bases
+    represented_imbalance = (
+        2 * (abs(represented[first]) - abs(represented[second])) / bases
+    )
+    return (
+        np.max(
+            abs(abs(represented_difference) - abs(reference_difference)) / bases, axis=0
+        ),
+        np.max(abs(represented_difference - reference_difference) / bases, axis=0),
+        np.max(abs(reference_imbalance), axis=0),
+        np.max(abs(represented_imbalance), axis=0),
+        np.max(abs(represented_imbalance - reference_imbalance), axis=0),
+    )
+
+
 def _bases(values: np.ndarray, size: int) -> np.ndarray:
     bases = np.array(values, dtype=float, copy=True)
     if bases.shape != (size,) or not np.all(np.isfinite(bases)) or np.any(bases <= 0):
@@ -26,6 +57,7 @@ def configuration_fingerprint(
     voltage_bases: np.ndarray,
     *,
     model_signature: str = "",
+    service_domains: Mapping[str, str] | None = None,
 ) -> str:
     """Hash canonical SI matrix data, indexing, bases, sources, and model identity."""
     bases = _bases(voltage_bases, len(network.labels))
@@ -47,6 +79,8 @@ def configuration_fingerprint(
         ],
         "model_signature": model_signature,
     }
+    if service_domains:
+        descriptor["service_domains"] = sorted(service_domains.items())
     digest = hashlib.sha256(json.dumps(descriptor, sort_keys=True).encode())
     for values, dtype in (
         (matrix.indptr, "<i8"),
@@ -121,6 +155,7 @@ class ScenarioLibrary:
     model_signature: str = ""
     bus_uuids: Mapping[str, str] = field(default_factory=dict)
     component_buses: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    service_domains: Mapping[str, str] = field(default_factory=dict)
     max_reference_mismatch_pu: float = 1e-5
     kcl_atol_a: float = 1e-7
     kcl_rtol: float = 1e-8
@@ -142,8 +177,17 @@ class ScenarioLibrary:
             self.network.admittance, self.network.labels, self.network.source_voltages
         )
         bases = _bases(self.voltage_bases, len(network.labels))
+        domains = dict(self.service_domains)
+        split_buses = {bus for bus, phase in network.labels if phase in {"S1", "S2"}}
+        if set(domains) != split_buses or any(
+            not isinstance(domain, str) or not domain for domain in domains.values()
+        ):
+            raise ValueError("Split-phase service domains must cover every S1/S2 bus.")
         fingerprint = configuration_fingerprint(
-            network, bases, model_signature=self.model_signature
+            network,
+            bases,
+            model_signature=self.model_signature,
+            service_domains=domains,
         )
         scenarios = tuple(self.scenarios)
         if not scenarios or len({item.name for item in scenarios}) != len(scenarios):
@@ -198,6 +242,7 @@ class ScenarioLibrary:
         object.__setattr__(self, "max_kcl_residual_a", residuals)
         object.__setattr__(self, "bus_uuids", MappingProxyType(bus_uuids))
         object.__setattr__(self, "component_buses", MappingProxyType(lineage))
+        object.__setattr__(self, "service_domains", MappingProxyType(domains))
 
     @property
     def voltage(self) -> np.ndarray:

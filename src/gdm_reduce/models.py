@@ -11,13 +11,14 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 
 BusPhaseLabel = tuple[str, str]
+SUPPORTED_PHASES = frozenset({"A", "B", "C", "S1", "S2"})
 
 
 @dataclass(frozen=True)
 class ElectricalNetwork:
     """Passive admittance in siemens, with fixed source voltages in volts.
 
-    Only existing A/B/C terminals are represented. Source currents are outputs
+    Only existing A/B/C/S1/S2 terminals are represented. Source currents are outputs
     of the voltage solve, not prescribed boundary conditions. Input matrices
     and source mappings are copied; no neutral or split-phase inference occurs.
     """
@@ -33,10 +34,10 @@ class ElectricalNetwork:
             or len(label) != 2
             or not isinstance(label[0], str)
             or not label[0]
-            or label[1] not in {"A", "B", "C"}
+            or label[1] not in SUPPORTED_PHASES
             for label in labels
         ):
-            raise ValueError("Labels must be nonempty (bus_name, A/B/C) tuples.")
+            raise ValueError("Labels must be nonempty (bus_name, A/B/C/S1/S2) tuples.")
         if len(set(labels)) != len(labels):
             raise ValueError("Bus-phase labels must be unique.")
         admittance = csr_matrix(self.admittance, dtype=np.complex128, copy=True)

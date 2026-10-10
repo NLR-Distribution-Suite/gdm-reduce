@@ -1,0 +1,24 @@
+version: 1
+project:
+  title: GDM-Reduce
+  subtitle: Phase-aware Kron reduction and validated GDM equivalents
+  github: NLR-Distribution-Suite/gdm-reduce
+  authors:
+    - name: NLR Distribution Suite
+  license:
+    code: BSD-3-Clause
+  bibliography:
+    - references.bib
+  toc:
+    - file: index.md
+    - file: installation.md
+    - file: theory.md
+    - file: numerical-contract.md
+    - file: models.md
+    - file: comparison.ipynb
+    - file: api.md
+site:
+  template: book-theme
+  options:
+    logo_text: GDM-Reduce
+    folders: true

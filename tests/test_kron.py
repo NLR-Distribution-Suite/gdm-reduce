@@ -217,7 +217,7 @@ def test_singular_and_ill_conditioned_grounded_blocks():
     [
         (),
         (("source", "N"),),
-        (("source", "S1"),),
+        (("source", "L1"),),
         (("", "A"),),
         (("source", "A"), ("source", "A")),
     ],
