@@ -22,7 +22,12 @@ from .kron import KronReductionResult, kron_reduce, solve_voltages
 from .models import BusPhaseLabel, ElectricalNetwork
 from .radialization import RadializationResult, radialize_reduction
 from .scenarios import ReferenceScenario, ScenarioLibrary, configuration_fingerprint
-from .search import CandidateSearchResult, ReductionStep, optimize_kron_reduction
+from .search import (
+    CandidateSearchResult,
+    ReductionStep,
+    SearchProgress,
+    optimize_kron_reduction,
+)
 from .validation import (
     ReductionValidationReport,
     ScenarioValidation,
@@ -43,6 +48,7 @@ __all__ = [
     "ReductionValidationReport",
     "ScenarioLibrary",
     "ScenarioValidation",
+    "SearchProgress",
     "audit_split_phase_grounding",
     "build_gdm_scenario_library",
     "build_reduced_gdm",
