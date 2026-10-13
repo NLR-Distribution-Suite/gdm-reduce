@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
+from math import ceil
+from time import perf_counter
 from types import MappingProxyType
 from typing import Literal
 
@@ -23,6 +25,17 @@ class ReductionStep:
     feasible_candidates: int
     max_voltage_error_pu: float
     smice: float
+
+
+@dataclass(frozen=True)
+class SearchProgress:
+    completed_iterations: int
+    estimated_iterations: int
+    retained_bus_count: int
+    total_bus_count: int
+    evaluated_candidates: int
+    feasible_candidates: int
+    elapsed_seconds: float
 
 
 @dataclass(frozen=True)
@@ -88,11 +101,18 @@ def _represent(
     represented = voltage[representatives]
     errors = np.abs(np.abs(represented) - np.abs(reference_voltage))
     errors /= library.voltage_bases[:, None]
-    roots = np.array([mapping[bus] for bus, _ in library.network.labels])
-    smice = sum(
-        float(np.max(errors[roots == root], axis=0).sum())
-        for root in sorted(set(mapping.values()))
+    root_names = sorted(set(mapping.values()))
+    root_indices_by_name = {root: index for index, root in enumerate(root_names)}
+    root_indices = np.fromiter(
+        (root_indices_by_name[mapping[bus]] for bus, _ in library.network.labels),
+        dtype=np.intp,
+        count=len(library.network.labels),
     )
+    # Group terminal errors in one linear pass. Comparing the full string-valued
+    # roots array once per cluster made candidate scoring quadratic in bus count.
+    cluster_errors = np.zeros((len(root_names), errors.shape[1]), dtype=errors.dtype)
+    np.maximum.at(cluster_errors, root_indices, errors)
+    smice = sum(float(cluster_errors[index].sum()) for index in range(len(root_names)))
     differential_error = split_phase_voltage_errors(
         library, represented, reference_voltage
     )[1]
@@ -132,6 +152,7 @@ def optimize_kron_reduction(
     max_iterations: int | None = None,
     batch_size: int = 32,
     max_condition_number: float = 1e12,
+    progress_callback: Callable[[SearchProgress], None] | None = None,
 ) -> CandidateSearchResult:
     """Select connected, phase-compatible bus clusters by Algorithm 1 SMICE.
 
@@ -185,6 +206,22 @@ def optimize_kron_reduction(
     if error > voltage_error_limit_pu:
         raise ValueError("Full-network reference consistency exceeds the error limit.")
     history = []
+    estimated_iterations = ceil(target_reduction_fraction * len(buses))
+    if max_iterations is not None:
+        estimated_iterations = min(estimated_iterations, max_iterations)
+    search_started = perf_counter()
+    if progress_callback is not None:
+        progress_callback(
+            SearchProgress(
+                0,
+                estimated_iterations,
+                len(clusters),
+                len(buses),
+                0,
+                0,
+                0.0,
+            )
+        )
     while True:
         if 1 - len(clusters) / len(buses) >= target_reduction_fraction:
             reason = "target_reached"
@@ -276,6 +313,18 @@ def optimize_kron_reduction(
                 smice,
             )
         )
+        if progress_callback is not None:
+            progress_callback(
+                SearchProgress(
+                    len(history),
+                    estimated_iterations,
+                    len(clusters),
+                    len(buses),
+                    len(candidates),
+                    feasible,
+                    perf_counter() - search_started,
+                )
+            )
     equivalent = kron_reduce(
         network, set(clusters), max_condition_number=max_condition_number
     )

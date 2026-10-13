@@ -17,7 +17,7 @@ from gdm_reduce.scenarios import (
     ScenarioLibrary,
     configuration_fingerprint,
 )
-from gdm_reduce.search import optimize_kron_reduction
+from gdm_reduce.search import _represent, optimize_kron_reduction
 from gdm_reduce.validation import evaluate_reduction, pool_scenario_currents
 
 
@@ -67,6 +67,36 @@ def test_closed_form_merge_and_original_bus_error(chain_library):
     np.testing.assert_allclose(retained[:, 1], [120, 119.7])
 
 
+def test_represent_cluster_score_matches_reference_grouping(chain_library):
+    mapping = {"source": "source", "middle": "middle", "load": "middle"}
+    indices = {label: index for index, label in enumerate(chain_library.network.labels)}
+
+    represented, error, smice = _represent(
+        chain_library,
+        mapping,
+        chain_library.voltage,
+        indices,
+        chain_library.voltage,
+    )
+
+    terminal_roots = np.array([mapping[bus] for bus, _ in chain_library.network.labels])
+    errors = (
+        np.abs(np.abs(represented) - np.abs(chain_library.voltage))
+        / chain_library.voltage_bases[:, None]
+    )
+    expected_smice = sum(
+        float(np.max(errors[terminal_roots == root], axis=0).sum())
+        for root in sorted(set(mapping.values()))
+    )
+
+    represented_indices = [
+        indices[(mapping[bus], phase)] for bus, phase in chain_library.network.labels
+    ]
+    np.testing.assert_allclose(represented, chain_library.voltage[represented_indices])
+    assert error == pytest.approx(float(np.max(errors)))
+    assert smice == pytest.approx(expected_smice)
+
+
 def test_full_cluster_memberships_survive_successive_merges(chain_library):
     result = optimize_kron_reduction(chain_library, EDGES, voltage_error_limit_pu=0.01)
     assert len(result.history) == 2
@@ -97,6 +127,26 @@ def test_batch_sizes_and_stop_conditions(chain_library):
     )
     assert unchanged.termination_reason == "target_reached"
     assert unchanged.reduction_fraction == 0
+
+
+def test_search_reports_iteration_progress(chain_library):
+    progress = []
+
+    optimize_kron_reduction(
+        chain_library,
+        EDGES,
+        voltage_error_limit_pu=0.01,
+        target_reduction_fraction=0.5,
+        max_iterations=1,
+        progress_callback=progress.append,
+    )
+
+    assert [item.completed_iterations for item in progress] == [0, 1]
+    assert all(item.estimated_iterations == 1 for item in progress)
+    assert progress[-1].retained_bus_count == 2
+    assert progress[-1].total_bus_count == 3
+    assert progress[-1].evaluated_candidates > 0
+    assert progress[-1].elapsed_seconds >= 0
 
 
 def test_protected_buses_are_not_eliminated(chain_library):
