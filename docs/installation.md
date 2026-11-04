@@ -11,7 +11,7 @@ python -m pip install '.[flow]'
 ```
 
 The core requires grid-data-models 2.4.0 or newer. Flow integration requires
-the released gdm-flow 0.5.0 or newer. Imports use `gdm.systems.distribution`.
+the released gdm-flow 0.6.0 or newer. Imports use `gdm.systems.distribution`.
 
 ## Book and Notebook
 
